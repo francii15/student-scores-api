@@ -1,8 +1,8 @@
-\# Student Scores API
+# Student Scores API
 
 
 
-\[!\[API Tests](https://github.com/francii15/student-scores-api/actions/workflows/tests.yml/badge.svg)](https://github.com/francii15/student-scores-api/actions/workflows/tests.yml)
+[![API Tests](https://github.com/francii15/student-scores-api/actions/workflows/tests.yml/badge.svg)](https://github.com/francii15/student-scores-api/actions/workflows/tests.yml)
 
 
 
@@ -20,51 +20,51 @@ and the average score.
 
 
 
-\## Features
+## Features
 
 
 
-\- Configurable pass mark, defaulting to 50.
+- Configurable pass mark, defaulting to 50.
 
-\- Passing and failing student classifications.
+- Passing and failing student classifications.
 
-\- Total, passed, and failed student counts.
+- Total, passed, and failed student counts.
 
-\- Average score rounded to two decimal places.
+- Average score rounded to two decimal places.
 
-\- Validation of scores and pass marks between 0 and 100.
+- Validation of scores and pass marks between 0 and 100.
 
-\- Rejection of empty student submissions.
+- Rejection of empty student submissions.
 
-\- API-key authentication through the `X-API-Key` header.
+- API-key authentication through the `X-API-Key` header.
 
-\- Interactive Swagger UI documentation.
+- Interactive Swagger UI documentation.
 
-\- Eight automated tests.
-
-
-
-\## Technologies
+- Eight automated tests.
 
 
 
-\- Python 3.11+
-
-\- FastAPI
-
-\- Pydantic
-
-\- Uvicorn
-
-\- python-dotenv
-
-\- pytest
-
-\- HTTPX2 for the test client
+## Technologies
 
 
 
-\## Project Files
+- Python 3.11+
+
+- FastAPI
+
+- Pydantic
+
+- Uvicorn
+
+- python-dotenv
+
+- pytest
+
+- HTTPX2 for the test client
+
+
+
+## Project Files
 
 
 
@@ -74,7 +74,7 @@ and the average score.
 
 | `app.py` | API routes, authentication, validation, and analysis |
 
-| `test\_app.py` | Automated API tests |
+| `test_app.py` | Automated API tests |
 
 | `requirements.txt` | Python dependencies |
 
@@ -92,7 +92,7 @@ committed to Git.
 
 
 
-\## Installation
+## Installation
 
 
 
@@ -140,7 +140,7 @@ python -m pip install -r requirements.txt
 
 
 
-\## Configure the API Key
+## Configure the API Key
 
 
 
@@ -170,7 +170,7 @@ Generate a random key:
 
 ```bash
 
-python -c "import secrets; print(secrets.token\_hex(32))"
+python -c "import secrets; print(secrets.token_hex(32))"
 
 ```
 
@@ -182,7 +182,7 @@ Open `.env` and replace the placeholder:
 
 ```text
 
-STUDENT\_API\_KEY=your\_generated\_key
+STUDENT_API_KEY=your_generated_key
 
 ```
 
@@ -194,7 +194,7 @@ Keep the real key private. `.env.example` should contain only:
 
 ```text
 
-STUDENT\_API\_KEY=replace\_with\_your\_own\_generated\_key
+STUDENT_API_KEY=replace_with_your_own_generated_key
 
 ```
 
@@ -204,7 +204,7 @@ Restart the application after changing its key.
 
 
 
-\## Run Locally
+## Run Locally
 
 
 
@@ -224,9 +224,9 @@ Open:
 
 
 
-\- Home endpoint: http://127.0.0.1:8000/
+- Home endpoint: http://127.0.0.1:8000/
 
-\- Interactive documentation: http://127.0.0.1:8000/docs
+- Interactive documentation: http://127.0.0.1:8000/docs
 
 
 
@@ -240,7 +240,7 @@ The `--reload` option is intended for local development.
 
 
 
-\## Endpoints
+## Endpoints
 
 
 
@@ -254,7 +254,7 @@ The `--reload` option is intended for local development.
 
 
 
-\### GET /
+### GET /
 
 
 
@@ -274,7 +274,7 @@ Returns:
 
 
 
-\### POST /passing-students
+### POST /passing-students
 
 
 
@@ -282,27 +282,27 @@ Accepts student scores and an optional pass mark.
 
 
 
-\### Request Rules
+### Request Rules
 
 
 
-\- `scores` must contain at least one student.
+- `scores` must contain at least one student.
 
-\- Every score must be between 0 and 100, inclusive.
+- Every score must be between 0 and 100, inclusive.
 
-\- `pass\_mark` must be between 0 and 100, inclusive.
+- `pass_mark` must be between 0 and 100, inclusive.
 
-\- If omitted, `pass\_mark` defaults to 50.
+- If omitted, `pass_mark` defaults to 50.
 
-\- A score equal to the pass mark counts as passing.
+- A score equal to the pass mark counts as passing.
 
-\- Student names must be unique within the request because they
+- Student names must be unique within the request because they
 
 &#x20; are dictionary keys.
 
 
 
-\## Authentication
+## Authentication
 
 
 
@@ -312,7 +312,7 @@ Send your key in the request header:
 
 ```http
 
-X-API-Key: your\_generated\_key
+X-API-Key: your_generated_key
 
 ```
 
@@ -322,19 +322,19 @@ In Swagger UI:
 
 
 
-1\. Click \*\*Authorize\*\*.
+1. Click **Authorize**.
 
-2\. Enter only the key value.
+2. Enter only the key value.
 
-3\. Click \*\*Authorize\*\*, then \*\*Close\*\*.
+3. Click **Authorize**, then **Close**.
 
-4\. Expand the POST endpoint.
+4. Expand the POST endpoint.
 
-5\. Click \*\*Try it out\*\*, enter the request body, and click \*\*Execute\*\*.
+5. Click **Try it out**, enter the request body, and click **Execute**.
 
 
 
-Do not include `STUDENT\_API\_KEY=` or a `Bearer` prefix in the
+Do not include `STUDENT_API_KEY=` or a `Bearer` prefix in the
 
 authorisation field.
 
@@ -344,7 +344,7 @@ Missing or incorrect keys return `401`.
 
 
 
-\## Example Request
+## Example Request
 
 
 
@@ -362,7 +362,7 @@ Missing or incorrect keys return `401`.
 
 &#x20; },
 
-&#x20; "pass\_mark": 60
+&#x20; "pass_mark": 60
 
 }
 
@@ -370,7 +370,7 @@ Missing or incorrect keys return `401`.
 
 
 
-\## Example Response
+## Example Response
 
 
 
@@ -378,15 +378,15 @@ Missing or incorrect keys return `401`.
 
 {
 
-&#x20; "pass\_mark": 60.0,
+&#x20; "pass_mark": 60.0,
 
-&#x20; "total\_students": 3,
+&#x20; "total_students": 3,
 
-&#x20; "passed\_count": 1,
+&#x20; "passed_count": 1,
 
-&#x20; "failed\_count": 2,
+&#x20; "failed_count": 2,
 
-&#x20; "average\_score": 60.67,
+&#x20; "average_score": 60.67,
 
 &#x20; "passed": {
 
@@ -408,7 +408,7 @@ Missing or incorrect keys return `401`.
 
 
 
-\## Response Codes
+## Response Codes
 
 
 
@@ -424,7 +424,7 @@ Missing or incorrect keys return `401`.
 
 
 
-\## Automated Tests
+## Automated Tests
 
 
 
@@ -450,21 +450,21 @@ The eight tests cover:
 
 
 
-1\. Public endpoint availability.
+1. Public endpoint availability.
 
-2\. Missing API key rejection.
+2. Missing API key rejection.
 
-3\. Incorrect API key rejection.
+3. Incorrect API key rejection.
 
-4\. Results summary calculations.
+4. Results summary calculations.
 
-5\. Default pass mark and exact-boundary behaviour.
+5. Default pass mark and exact-boundary behaviour.
 
-6\. Empty score submission rejection.
+6. Empty score submission rejection.
 
-7\. Out-of-range score rejection.
+7. Out-of-range score rejection.
 
-8\. Out-of-range pass mark rejection.
+8. Out-of-range pass mark rejection.
 
 
 
@@ -480,37 +480,37 @@ and no warnings.
 
 
 
-\## Limitations
+## Limitations
 
 
 
-\- Scores are processed per request and are not stored in a database.
+- Scores are processed per request and are not stored in a database.
 
-\- The application uses one shared API key rather than individual accounts.
+- The application uses one shared API key rather than individual accounts.
 
-\- The API does not implement rate limiting or per-user permissions.
+- The API does not implement rate limiting or per-user permissions.
 
-\- This project does not train or call an AI model.
+- This project does not train or call an AI model.
 
-\- Uploading the code to GitHub does not deploy the API.
+- Uploading the code to GitHub does not deploy the API.
 
-\- Online deployment requires HTTPS and appropriate production configuration.
-
-
-
-\## Security Notes
+- Online deployment requires HTTPS and appropriate production configuration.
 
 
 
-\- Never commit real API keys.
+## Security Notes
 
-\- Keep `.env` excluded through `.gitignore`.
 
-\- Use placeholders in `.env.example`.
 
-\- Replace any key that has been exposed.
+- Never commit real API keys.
 
-\- Removing a secret from the latest file does not remove it
+- Keep `.env` excluded through `.gitignore`.
+
+- Use placeholders in `.env.example`.
+
+- Replace any key that has been exposed.
+
+- Removing a secret from the latest file does not remove it
 
 &#x20; from earlier Git commits.
 
