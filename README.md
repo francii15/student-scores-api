@@ -2,9 +2,15 @@
 
 
 
-A Python API built with FastAPI that analyses student scores
+A Python API built with FastAPI that analyses student scores using
 
-using a configurable pass mark and API-key authentication.
+a configurable pass mark and API-key authentication.
+
+
+
+The API returns passing and failing students, student counts,
+
+and the average score.
 
 
 
@@ -12,19 +18,23 @@ using a configurable pass mark and API-key authentication.
 
 
 
-\- Classifies students as passed or failed.
+\- Configurable pass mark, defaulting to 50.
 
-\- Supports a configurable pass mark, defaulting to 50.
+\- Passing and failing student classifications.
 
-\- Returns student counts and the average score.
+\- Total, passed, and failed student counts.
 
-\- Validates scores and the pass mark between 0 and 100.
+\- Average score rounded to two decimal places.
 
-\- Rejects empty student submissions.
+\- Validation of scores and pass marks between 0 and 100.
 
-\- Protects the analysis endpoint using an X-API-Key header.
+\- Rejection of empty student submissions.
 
-\- Provides interactive Swagger UI documentation.
+\- API-key authentication through the `X-API-Key` header.
+
+\- Interactive Swagger UI documentation.
+
+\- Eight automated tests.
 
 
 
@@ -32,11 +42,83 @@ using a configurable pass mark and API-key authentication.
 
 
 
-Python 3.11+, FastAPI, Pydantic, Uvicorn, and python-dotenv.
+\- Python 3.11+
+
+\- FastAPI
+
+\- Pydantic
+
+\- Uvicorn
+
+\- python-dotenv
+
+\- pytest
+
+\- HTTPX2 for the test client
 
 
 
-\## Setup
+\## Project Files
+
+
+
+| File | Purpose |
+
+|------|---------|
+
+| `app.py` | API routes, authentication, validation, and analysis |
+
+| `test\_app.py` | Automated API tests |
+
+| `requirements.txt` | Python dependencies |
+
+| `.env.example` | Configuration template containing a placeholder |
+
+| `.gitignore` | Excludes private configuration and temporary files |
+
+| `README.md` | Project documentation |
+
+
+
+The local `.env` file contains the real API key and must not be
+
+committed to Git.
+
+
+
+\## Installation
+
+
+
+Clone the repository:
+
+
+
+```bash
+
+git clone https://github.com/francii15/student-scores-api.git
+
+cd student-scores-api
+
+```
+
+
+
+Create and activate an environment using Anaconda Prompt:
+
+
+
+```bat
+
+conda create -n scores-api python=3.11 -y
+
+conda activate scores-api
+
+```
+
+
+
+If the environment already exists, activate it without creating it again.
 
 
 
@@ -52,7 +134,11 @@ python -m pip install -r requirements.txt
 
 
 
-Copy `.env.example` to `.env`.
+\## Configure the API Key
+
+
+
+Copy the example configuration to `.env`.
 
 
 
@@ -68,7 +154,11 @@ copy .env.example .env
 
 
 
-Generate a private key:
+If `.env` already exists, edit it instead of overwriting it.
+
+
+
+Generate a random key:
 
 
 
@@ -80,7 +170,7 @@ python -c "import secrets; print(secrets.token\_hex(32))"
 
 
 
-Place the generated value in your local `.env` file:
+Open `.env` and replace the placeholder:
 
 
 
@@ -92,13 +182,27 @@ STUDENT\_API\_KEY=your\_generated\_key
 
 
 
-Keep `.env` private. The `.env.example` file should contain
+Keep the real key private. `.env.example` should contain only:
 
-only a placeholder.
+
+
+```text
+
+STUDENT\_API\_KEY=replace\_with\_your\_own\_generated\_key
+
+```
+
+
+
+Restart the application after changing its key.
 
 
 
 \## Run Locally
+
+
+
+From the project folder:
 
 
 
@@ -110,15 +214,23 @@ python -m uvicorn app:app --reload
 
 
 
+Open:
+
+
+
 \- Home endpoint: http://127.0.0.1:8000/
 
 \- Interactive documentation: http://127.0.0.1:8000/docs
 
 
 
-In Swagger UI, click \*\*Authorize\*\* and enter only your API key.
+Keep the terminal running while using the API.
 
-Then use \*\*POST /passing-students\*\* to submit scores.
+Press `Ctrl+C` to stop the server.
+
+
+
+The `--reload` option is intended for local development.
 
 
 
@@ -130,9 +242,99 @@ Then use \*\*POST /passing-students\*\* to submit scores.
 
 |--------|-------|---------|----------------|
 
-| GET | / | Basic availability check | Public |
+| GET | `/` | Basic availability check | Public |
 
-| POST | /passing-students | Analyse student results | X-API-Key |
+| POST | `/passing-students` | Analyse student results | API key required |
+
+
+
+\### GET /
+
+
+
+Returns:
+
+
+
+```json
+
+{
+
+&#x20; "message": "Student Scores API is running"
+
+}
+
+```
+
+
+
+\### POST /passing-students
+
+
+
+Accepts student scores and an optional pass mark.
+
+
+
+\### Request Rules
+
+
+
+\- `scores` must contain at least one student.
+
+\- Every score must be between 0 and 100, inclusive.
+
+\- `pass\_mark` must be between 0 and 100, inclusive.
+
+\- If omitted, `pass\_mark` defaults to 50.
+
+\- A score equal to the pass mark counts as passing.
+
+\- Student names must be unique within the request because they
+
+&#x20; are dictionary keys.
+
+
+
+\## Authentication
+
+
+
+Send your key in the request header:
+
+
+
+```http
+
+X-API-Key: your\_generated\_key
+
+```
+
+
+
+In Swagger UI:
+
+
+
+1\. Click \*\*Authorize\*\*.
+
+2\. Enter only the key value.
+
+3\. Click \*\*Authorize\*\*, then \*\*Close\*\*.
+
+4\. Expand the POST endpoint.
+
+5\. Click \*\*Try it out\*\*, enter the request body, and click \*\*Execute\*\*.
+
+
+
+Do not include `STUDENT\_API\_KEY=` or a `Bearer` prefix in the
+
+authorisation field.
+
+
+
+Missing or incorrect keys return `401`.
 
 
 
@@ -159,12 +361,6 @@ Then use \*\*POST /passing-students\*\* to submit scores.
 }
 
 ```
-
-
-
-If `pass\_mark` is omitted, the API uses 50.
-
-A score equal to the pass mark counts as passing.
 
 
 
@@ -210,33 +406,71 @@ A score equal to the pass mark counts as passing.
 
 
 
-\- \*\*200:\*\* Request processed successfully.
+| Code | Meaning |
 
-\- \*\*401:\*\* Missing or invalid API key.
+|------|---------|
 
-\- \*\*422:\*\* Request data failed validation.
+| `200` | Request processed successfully |
 
+| `401` | Missing or invalid API key |
 
-
-\## Manual Checks
-
-
-
-The following behaviours were checked through Swagger UI:
+| `422` | Request data failed validation |
 
 
 
-\- Valid requests return the expected results.
+\## Automated Tests
 
-\- Omitting the pass mark uses 50.
 
-\- A score equal to the pass mark passes.
 
-\- Empty submissions are rejected.
+Run the test suite from the project folder:
 
-\- Out-of-range scores and pass marks are rejected.
 
-\- Missing or incorrect API keys are rejected.
+
+```bash
+
+python -m pytest -q
+
+```
+
+
+
+Uvicorn does not need to be running. FastAPI's `TestClient`
+
+sends requests directly to the application.
+
+
+
+The eight tests cover:
+
+
+
+1\. Public endpoint availability.
+
+2\. Missing API key rejection.
+
+3\. Incorrect API key rejection.
+
+4\. Results summary calculations.
+
+5\. Default pass mark and exact-boundary behaviour.
+
+6\. Empty score submission rejection.
+
+7\. Out-of-range score rejection.
+
+8\. Out-of-range pass mark rejection.
+
+
+
+Tests use a test-only key set inside the test process.
+
+They do not modify your local `.env` file.
+
+
+
+The test suite was verified locally with all eight tests passing
+
+and no warnings.
 
 
 
@@ -244,15 +478,33 @@ The following behaviours were checked through Swagger UI:
 
 
 
-\- Student scores are processed per request and are not stored.
+\- Scores are processed per request and are not stored in a database.
 
-\- Student names are dictionary keys and must be unique within
+\- The application uses one shared API key rather than individual accounts.
 
-&#x20; each request.
+\- The API does not implement rate limiting or per-user permissions.
 
-\- The application uses one shared API key, not individual accounts.
+\- This project does not train or call an AI model.
 
-\- The development server runs locally.
+\- Uploading the code to GitHub does not deploy the API.
 
-\- Online deployment requires HTTPS and appropriate production setup.
+\- Online deployment requires HTTPS and appropriate production configuration.
+
+
+
+\## Security Notes
+
+
+
+\- Never commit real API keys.
+
+\- Keep `.env` excluded through `.gitignore`.
+
+\- Use placeholders in `.env.example`.
+
+\- Replace any key that has been exposed.
+
+\- Removing a secret from the latest file does not remove it
+
+&#x20; from earlier Git commits.
 
