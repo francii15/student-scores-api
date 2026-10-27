@@ -2,6 +2,12 @@
 
 
 
+\[!\[API Tests](https://github.com/francii15/student-scores-api/actions/workflows/tests.yml/badge.svg)](https://github.com/francii15/student-scores-api/actions/workflows/tests.yml)
+
+
+
+
+
 A Python API built with FastAPI that analyses student scores using
 
 a configurable pass mark and API-key authentication.
