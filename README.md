@@ -2,7 +2,7 @@
 
 
 
-\[!\[API Tests](https://github.com/francii15/student-scores-api/actions/workflows/test.yml/badge.svg)](https://github.com/francii15/student-scores-api/actions/workflows/test.yml)
+\[!\[API Tests](https://github.com/francii15/student-scores-api/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/francii15/student-scores-api/actions/workflows/test.yml)
 
 
 
