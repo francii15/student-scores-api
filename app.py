@@ -13,7 +13,63 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Security
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 
+from models import User
+from schemas import UserCreate, UserResponse
+from security import hash_password
+from schemas import UserLogin, TokenResponse
+from security import (
+    DUMMY_PASSWORD_HASH,
+    create_access_token,
+    verify_password,
+)
+
+import jwt
+from jwt.exceptions import InvalidTokenError
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from security import get_jwt_secret
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Security(
+        bearer_scheme
+    ),
+    db: Session = Depends(get_db),
+):
+    auth_error = HTTPException(
+        status_code=401,
+        detail="Invalid or expired access token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    if credentials is None:
+        raise auth_error
+
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            get_jwt_secret(),
+            algorithms=["HS256"],
+            options={"require": ["sub", "iat", "exp"]},
+        )
+
+        user_id = int(payload["sub"])
+
+        if user_id <= 0:
+            raise ValueError("Invalid user ID")
+
+    except (InvalidTokenError, ValueError, TypeError):
+        raise auth_error
+
+    user = db.get(User, user_id)
+
+    if user is None:
+        raise auth_error
+
+    return user
 
 load_dotenv(Path(__file__).with_name(".env"))
 
@@ -187,3 +243,74 @@ def delete_student(
   db.commit()
   
   return deleted_student
+@app.post(
+    "/register",
+    response_model=UserResponse,
+    status_code=201,
+)
+def register_user(
+    request: UserCreate,
+    db: Session = Depends(get_db),
+):
+    user = User(
+        username=request.username,
+        password_hash=hash_password(request.password),
+    )
+
+    db.add(user)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Unable to register: username may already exist",
+        )
+
+    db.refresh(user)
+
+    return user
+@app.post(
+    "/login",
+    response_model=TokenResponse,
+)
+def login(
+    request: UserLogin,
+    db: Session = Depends(get_db),
+):
+    user = db.scalar(
+        select(User).where(
+            User.username == request.username
+        )
+    )
+
+    stored_hash = (
+        user.password_hash
+        if user is not None
+        else DUMMY_PASSWORD_HASH
+    )
+
+    password_matches = verify_password(
+        request.password,
+        stored_hash,
+    )
+
+    if user is None or not password_matches:
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+        )
+
+    return {
+        "access_token": create_access_token(user.id),
+        "token_type": "bearer",
+    }
+@app.get(
+    "/me",
+    response_model=UserResponse,
+)
+def get_me(
+    current_user: User = Depends(get_current_user),
+):
+    return current_user

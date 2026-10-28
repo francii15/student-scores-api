@@ -1,6 +1,12 @@
 import os
 
 os.environ["STUDENT_API_KEY"] = "test-only-key"
+os.environ["JWT_SECRET_KEY"] = (
+    "test-only-jwt-secret-at-least-32-characters"
+)
+
+import pytest
+from fastapi.testclient import TestClient
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +15,8 @@ from sqlalchemy.orm import Session
 
 from app import app
 from database import Base, get_db
+from models import User
+from security import verify_password
 
 
 @pytest.fixture
@@ -110,3 +118,66 @@ def test_student_crud(student_client):
     response = client.get("/students", headers=headers)
     assert response.status_code == 200
     assert response.json() == []
+def test_registration_and_login(student_client):
+    client = student_client
+    account = {
+        "username": "test_user",
+        "password": "Practice-only-Password!",
+    }
+
+    response = client.post("/register", json=account)
+    assert response.status_code == 201
+
+    user_data = response.json()
+    assert user_data["username"] == "test_user"
+    assert set(user_data) == {"id", "username"}
+
+    # Verify that the database contains a hash.
+    db_override = app.dependency_overrides[get_db]
+    session_generator = db_override()
+
+    try:
+        db = next(session_generator)
+        user = db.get(User, user_data["id"])
+
+        assert user.password_hash != account["password"]
+        assert verify_password(
+            account["password"],
+            user.password_hash,
+        )
+    finally:
+        session_generator.close()
+
+    response = client.post("/register", json=account)
+    assert response.status_code == 409
+
+    response = client.post(
+        "/login",
+        json={
+            "username": "test_user",
+            "password": "wrong-password",
+        },
+    )
+    assert response.status_code == 401
+
+    response = client.post("/login", json=account)
+    assert response.status_code == 200
+    assert response.json()["token_type"] == "bearer"
+
+    token = response.json()["access_token"]
+
+    response = client.get(
+        "/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    assert response.json() == user_data
+
+    response = client.get("/me")
+    assert response.status_code == 401
+
+    response = client.get(
+        "/me",
+        headers={"Authorization": "Bearer invalid-token"},
+    )
+    assert response.status_code == 401
