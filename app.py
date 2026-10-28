@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -110,3 +111,79 @@ def create_student(
     db.refresh(student)
 
     return student
+@app.get(
+     "/students/{student_id}",
+     response_model=StudentResponse,
+     dependencies=[Depends(verify_api_key)],
+)
+def get_student(
+   student_id:int,
+   db:Session=Depends(get_db),
+):
+   student=db.get(Student,student_id)
+
+    
+
+   if student is None:
+      raise HTTPException(
+         status_code = 404,
+         detail = "Student not found",
+)
+   return student
+
+@app.get(
+  "/students",
+  response_model=list[StudentResponse],
+  dependencies=[Depends(verify_api_key)],
+)
+def list_students(
+    db:Session = Depends(get_db),
+):
+    statement=select(Student).order_by(Student.id)
+    students=db.scalars(statement).all()
+    
+    return students
+@app.put("/students/{student_id}",
+     response_model=StudentResponse,
+     dependencies=[Depends(verify_api_key)],
+)
+def update_student(
+    student_id:int,
+    request:StudentCreate,
+    db:Session=Depends(get_db),
+):
+   student=db.get(Student,student_id)
+   
+   if student is None:
+      raise HTTPException(
+      status_code=404,
+      detail="Student not found",
+)
+   student.name=request.name
+   student.score=request.score
+    
+   db.commit()
+   db.refresh(student)
+   
+   return student
+@app.delete(
+   "/students/{student_id}",
+    response_model=StudentResponse,
+    dependencies=[Depends(verify_api_key)],
+)
+def delete_student(
+    student_id:int,
+    db:Session=Depends(get_db),
+):
+  student = db.get(Student,student_id)
+
+  if student is None:
+    raise HTTPException(
+         status_code=404,
+         detail="Student not found",
+)
+  deleted_student=StudentResponse.model_validate(student)
+  db.delete(student)
+  db.commit()
+  
+  return deleted_student
