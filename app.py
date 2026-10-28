@@ -1,3 +1,8 @@
+from sqlalchemy.orm import Session
+
+from database import get_db
+from models import Student
+from schemas import StudentCreate, StudentResponse
 import os
 import secrets
 from pathlib import Path
@@ -85,3 +90,23 @@ def passing_students(request: StudentRequest):
         "passed": passed,
         "failed": failed
     }
+@app.post(
+    "/students",
+    response_model=StudentResponse,
+    status_code=201,
+    dependencies=[Depends(verify_api_key)],
+)
+def create_student(
+    request: StudentCreate,
+    db: Session = Depends(get_db),
+):
+    student = Student(
+        name=request.name,
+        score=request.score,
+    )
+
+    db.add(student)
+    db.commit()
+    db.refresh(student)
+
+    return student
