@@ -1,36 +1,74 @@
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-from database import get_db
-from models import Student
-from schemas import StudentCreate, StudentResponse
 import os
 import secrets
 from pathlib import Path
 from typing import Annotated
 
+import jwt
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Security
-from fastapi.security import APIKeyHeader
+from fastapi.security import (
+    APIKeyHeader,
+    HTTPAuthorizationCredentials,
+    HTTPBearer,
+)
+from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from models import User
-from schemas import UserCreate, UserResponse
-from security import hash_password
-from schemas import UserLogin, TokenResponse
+from database import get_db
+from models import Student, User
+from schemas import (
+    StudentCreate,
+    StudentResponse,
+    TokenResponse,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+)
 from security import (
     DUMMY_PASSWORD_HASH,
     create_access_token,
+    get_jwt_secret,
+    hash_password,
     verify_password,
 )
 
-import jwt
-from jwt.exceptions import InvalidTokenError
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from security import get_jwt_secret
+load_dotenv(Path(__file__).with_name(".env"))
+
+API_KEY = os.getenv("STUDENT_API_KEY")
+
+if not API_KEY:
+    raise RuntimeError("Set STUDENT_API_KEY in your .env file")
+
+
+app = FastAPI(
+    title="Student Scores API",
+    description="Analyse student scores with API-key and JWT authentication.",
+    version="0.3.0",
+)
+
+api_key_header = APIKeyHeader(
+    name="X-API-Key",
+    auto_error=False,
+)
+
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def verify_api_key(
+    supplied_key: str | None = Security(api_key_header),
+):
+    if supplied_key is None or not secrets.compare_digest(
+        supplied_key.encode("utf-8"),
+        API_KEY.encode("utf-8"),
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid API key",
+        )
 
 
 def get_current_user(
@@ -71,43 +109,23 @@ def get_current_user(
 
     return user
 
-load_dotenv(Path(__file__).with_name(".env"))
 
-API_KEY = os.getenv("STUDENT_API_KEY")
-
-if not API_KEY:
-    raise RuntimeError("Set STUDENT_API_KEY in your .env file")
-
-
-app = FastAPI(
-    title="Student Scores API",
-    description="Analyse student scores with API-key authentication.",
-    version="0.3.0"
-)
-
-api_key_header = APIKeyHeader(
-    name="X-API-Key",
-    auto_error=False
-)
-
-
-def verify_api_key(
-    supplied_key: str | None = Security(api_key_header)
+def require_admin(
+    current_user: User = Depends(get_current_user),
 ):
-    if supplied_key is None or not secrets.compare_digest(
-        supplied_key.encode("utf-8"),
-        API_KEY.encode("utf-8")
-    ):
+    if current_user.role != "admin":
         raise HTTPException(
-            status_code=401,
-            detail="Missing or invalid API key"
+            status_code=403,
+            detail="Admin access required",
         )
+
+    return current_user
 
 
 class StudentRequest(BaseModel):
     scores: dict[
         str,
-        Annotated[float, Field(ge=0, le=100)]
+        Annotated[float, Field(ge=0, le=100)],
     ] = Field(min_length=1)
 
     pass_mark: float = Field(default=50, ge=0, le=100)
@@ -121,11 +139,10 @@ def home():
 @app.post(
     "/passing-students",
     dependencies=[Depends(verify_api_key)],
-    summary="Analyse student results"
+    summary="Analyse student results",
 )
 def passing_students(request: StudentRequest):
     """Classify scores and return a results summary."""
-
     passed = {}
     failed = {}
 
@@ -145,8 +162,10 @@ def passing_students(request: StudentRequest):
         "failed_count": len(failed),
         "average_score": round(average_score, 2),
         "passed": passed,
-        "failed": failed
+        "failed": failed,
     }
+
+
 @app.post(
     "/students",
     response_model=StudentResponse,
@@ -167,82 +186,94 @@ def create_student(
     db.refresh(student)
 
     return student
+
+
 @app.get(
-     "/students/{student_id}",
-     response_model=StudentResponse,
-     dependencies=[Depends(verify_api_key)],
+    "/students/{student_id}",
+    response_model=StudentResponse,
+    dependencies=[Depends(verify_api_key)],
 )
 def get_student(
-   student_id:int,
-   db:Session=Depends(get_db),
+    student_id: int,
+    db: Session = Depends(get_db),
 ):
-   student=db.get(Student,student_id)
+    student = db.get(Student, student_id)
 
-    
+    if student is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Student not found",
+        )
 
-   if student is None:
-      raise HTTPException(
-         status_code = 404,
-         detail = "Student not found",
-)
-   return student
+    return student
+
 
 @app.get(
-  "/students",
-  response_model=list[StudentResponse],
-  dependencies=[Depends(verify_api_key)],
+    "/students",
+    response_model=list[StudentResponse],
+    dependencies=[Depends(verify_api_key)],
 )
 def list_students(
-    db:Session = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
-    statement=select(Student).order_by(Student.id)
-    students=db.scalars(statement).all()
-    
+    statement = select(Student).order_by(Student.id)
+    students = db.scalars(statement).all()
+
     return students
-@app.put("/students/{student_id}",
-     response_model=StudentResponse,
-     dependencies=[Depends(verify_api_key)],
+
+
+@app.put(
+    "/students/{student_id}",
+    response_model=StudentResponse,
+    dependencies=[Depends(verify_api_key)],
 )
 def update_student(
-    student_id:int,
-    request:StudentCreate,
-    db:Session=Depends(get_db),
+    student_id: int,
+    request: StudentCreate,
+    db: Session = Depends(get_db),
 ):
-   student=db.get(Student,student_id)
-   
-   if student is None:
-      raise HTTPException(
-      status_code=404,
-      detail="Student not found",
-)
-   student.name=request.name
-   student.score=request.score
-    
-   db.commit()
-   db.refresh(student)
-   
-   return student
+    student = db.get(Student, student_id)
+
+    if student is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Student not found",
+        )
+
+    student.name = request.name
+    student.score = request.score
+
+    db.commit()
+    db.refresh(student)
+
+    return student
+
+
 @app.delete(
-   "/students/{student_id}",
+    "/students/{student_id}",
     response_model=StudentResponse,
     dependencies=[Depends(verify_api_key)],
 )
 def delete_student(
-    student_id:int,
-    db:Session=Depends(get_db),
+    student_id: int,
+    db: Session = Depends(get_db),
 ):
-  student = db.get(Student,student_id)
+    student = db.get(Student, student_id)
 
-  if student is None:
-    raise HTTPException(
-         status_code=404,
-         detail="Student not found",
-)
-  deleted_student=StudentResponse.model_validate(student)
-  db.delete(student)
-  db.commit()
-  
-  return deleted_student
+    if student is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Student not found",
+        )
+
+    deleted_student = StudentResponse.model_validate(student)
+
+    db.delete(student)
+    db.commit()
+
+    return deleted_student
+
+
 @app.post(
     "/register",
     response_model=UserResponse,
@@ -271,6 +302,8 @@ def register_user(
     db.refresh(user)
 
     return user
+
+
 @app.post(
     "/login",
     response_model=TokenResponse,
@@ -280,9 +313,7 @@ def login(
     db: Session = Depends(get_db),
 ):
     user = db.scalar(
-        select(User).where(
-            User.username == request.username
-        )
+        select(User).where(User.username == request.username)
     )
 
     stored_hash = (
@@ -306,6 +337,8 @@ def login(
         "access_token": create_access_token(user.id),
         "token_type": "bearer",
     }
+
+
 @app.get(
     "/me",
     response_model=UserResponse,
@@ -314,3 +347,13 @@ def get_me(
     current_user: User = Depends(get_current_user),
 ):
     return current_user
+
+
+@app.get("/admin/check")
+def check_admin_access(
+    current_user: User = Depends(require_admin),
+):
+    return {
+        "message": "Admin access granted",
+        "username": current_user.username,
+    }

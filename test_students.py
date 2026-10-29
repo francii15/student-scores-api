@@ -12,6 +12,7 @@ os.environ["JWT_SECRET_KEY"] = (
 
 import pytest
 from fastapi.testclient import TestClient
+from security import create_access_token
 
 import pytest
 from fastapi.testclient import TestClient
@@ -244,3 +245,61 @@ def test_reject_invalid_tokens(student_client, scenario):
         "detail": "Invalid or expired access token"
     }
     assert response.headers["www-authenticate"] == "Bearer"
+@pytest.mark.parametrize(
+    "role, expected_status",
+    [
+        ("user", 403),
+        ("admin", 200),
+    ],
+)
+def test_admin_permissions(
+    student_client,
+    role,
+    expected_status,
+):
+    client = student_client
+
+    response = client.post(
+        "/register",
+        json={
+            "username": "permission_test",
+            "password": "Practice-only-Password!",
+        },
+    )
+    assert response.status_code == 201
+    user_id = response.json()["id"]
+
+    # Check registration creates an ordinary user.
+    db_override = app.dependency_overrides[get_db]
+    session_generator = db_override()
+
+    try:
+        db = next(session_generator)
+        user = db.get(User, user_id)
+
+        assert user.role == "user"
+
+        # Set the role for this test scenario.
+        user.role = role
+        db.commit()
+    finally:
+        session_generator.close()
+
+    token = create_access_token(user_id)
+
+    response = client.get(
+        "/admin/check",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == expected_status
+
+    if role == "admin":
+        assert response.json() == {
+            "message": "Admin access granted",
+            "username": "permission_test",
+        }
+    else:
+        assert response.json() == {
+            "detail": "Admin access required"
+        }
