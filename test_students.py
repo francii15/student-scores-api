@@ -1,3 +1,8 @@
+from datetime import datetime, timedelta, timezone
+
+import jwt
+
+from security import get_jwt_secret
 import os
 
 os.environ["STUDENT_API_KEY"] = "test-only-key"
@@ -181,3 +186,61 @@ def test_registration_and_login(student_client):
         headers={"Authorization": "Bearer invalid-token"},
     )
     assert response.status_code == 401
+@pytest.mark.parametrize("scenario", ["expired", "wrong_secret"])
+def test_reject_invalid_tokens(student_client, scenario):
+    client = student_client
+
+    response = client.post(
+        "/register",
+        json={
+            "username": "token_test_user",
+            "password": "Practice-only-Password!",
+        },
+    )
+    assert response.status_code == 201
+    user_id = response.json()["id"]
+
+    now = datetime.now(timezone.utc)
+    secret = get_jwt_secret()
+
+    payload = {
+        "sub": str(user_id),
+        "iat": now - timedelta(minutes=2),
+        "exp": now + timedelta(minutes=30),
+    }
+
+    # Confirm the user and valid token work first.
+    valid_token = jwt.encode(
+        payload,
+        secret,
+        algorithm="HS256",
+    )
+
+    response = client.get(
+        "/me",
+        headers={"Authorization": f"Bearer {valid_token}"},
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == user_id
+
+    if scenario == "expired":
+        payload["exp"] = now - timedelta(minutes=1)
+    else:
+        secret = "wrong-test-secret-at-least-32-characters"
+
+    invalid_token = jwt.encode(
+        payload,
+        secret,
+        algorithm="HS256",
+    )
+
+    response = client.get(
+        "/me",
+        headers={"Authorization": f"Bearer {invalid_token}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid or expired access token"
+    }
+    assert response.headers["www-authenticate"] == "Bearer"
