@@ -3,7 +3,7 @@ from sqlalchemy import select
 from models import Student
 from models import RefreshSession
 from security import hash_refresh_token
-
+from sqlalchemy.exc import SQLAlchemyError
 import jwt
 
 from security import get_jwt_secret
@@ -593,4 +593,45 @@ def test_logout_revokes_only_its_session(student_client):
             )
         },
     )
+    assert response.status_code == 200
+def test_health(student_client):
+    response = student_client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_readiness(student_client):
+    response = student_client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+def test_readiness_database_failure(
+    student_client,
+    monkeypatch,
+):
+    class BrokenDatabase:
+        def execute(self, statement):
+            raise SQLAlchemyError("Simulated database failure")
+
+    def override_failed_db():
+        yield BrokenDatabase()
+
+    monkeypatch.setitem(
+        app.dependency_overrides,
+        get_db,
+        override_failed_db,
+    )
+
+    response = student_client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "Service not ready"
+    }
+
+    # The application itself should still respond.
+    response = student_client.get("/health")
     assert response.status_code == 200

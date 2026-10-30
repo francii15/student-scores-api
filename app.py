@@ -5,6 +5,13 @@ from typing import Annotated
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from config import settings
+import json
+import logging
+from time import perf_counter
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
+from fastapi import Request
 
 from models import RefreshSession
 from security import create_refresh_token
@@ -51,6 +58,32 @@ app = FastAPI(
     description="Analyse student scores with API-key and JWT authentication.",
     version="0.3.0",
 )
+logger = logging.getLogger("uvicorn.error")
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    started_at = perf_counter()
+    status_code = 500
+
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        duration_ms = (perf_counter() - started_at) * 1000
+
+        logger.info(
+            json.dumps(
+                {
+                    "event": "http_request",
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status": status_code,
+                    "duration_ms": round(duration_ms, 2),
+                }
+            )
+        )
 
 api_key_header = APIKeyHeader(
     name="X-API-Key",
@@ -482,3 +515,24 @@ def logout(
         db.commit()
 
     return {"message": "Logged out"}
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+def readiness(
+    db: Session = Depends(get_db),
+):
+    try:
+        db.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        logger.error("database_readiness_failed")
+
+        raise HTTPException(
+            status_code=503,
+            detail="Service not ready",
+        )
+
+    return {"status": "ready"}
+
