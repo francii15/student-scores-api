@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select 
 from models import Student
+from models import RefreshSession
+from security import hash_refresh_token
 
 import jwt
 
@@ -427,3 +429,172 @@ def test_student_access_denied(
         assert students[0].score == 85
     finally:
         session_generator.close()
+def test_refresh_rotation_and_reuse(student_client):
+    client = student_client
+
+    account = {
+        "username": "refresh_test",
+        "password": "Practice-only-Password!",
+    }
+
+    # Register and log in.
+    response = client.post("/register", json=account)
+    assert response.status_code == 201
+    user_id = response.json()["id"]
+
+    response = client.post("/login", json=account)
+    assert response.status_code == 200
+    original_token = response.json()["refresh_token"]
+
+    # Exchange the original refresh token.
+    response = client.post(
+        "/refresh",
+        json={"refresh_token": original_token},
+    )
+    assert response.status_code == 200
+
+    new_pair = response.json()
+    replacement_token = new_pair["refresh_token"]
+
+    assert replacement_token != original_token
+    assert new_pair["token_type"] == "bearer"
+
+    # The new access token identifies the correct user.
+    response = client.get(
+        "/me",
+        headers={
+            "Authorization": (
+                f"Bearer {new_pair['access_token']}"
+            )
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == user_id
+
+    # Reusing the original token revokes its family.
+    response = client.post(
+        "/refresh",
+        json={"refresh_token": original_token},
+    )
+    assert response.status_code == 401
+
+    # The replacement belongs to the revoked family.
+    response = client.post(
+        "/refresh",
+        json={"refresh_token": replacement_token},
+    )
+    assert response.status_code == 401
+def test_expired_refresh_token(student_client):
+    client = student_client
+
+    account = {
+        "username": "expiry_test",
+        "password": "Practice-only-Password!",
+    }
+
+    response = client.post("/register", json=account)
+    assert response.status_code == 201
+
+    response = client.post("/login", json=account)
+    assert response.status_code == 200
+    token = response.json()["refresh_token"]
+
+    # Expire this session in the temporary database.
+    db_override = app.dependency_overrides[get_db]
+    session_generator = db_override()
+
+    try:
+        db = next(session_generator)
+
+        session_record = db.scalar(
+            select(RefreshSession).where(
+                RefreshSession.token_hash
+                == hash_refresh_token(token)
+            )
+        )
+        assert session_record is not None
+
+        session_record.expires_at = (
+            int(datetime.now(timezone.utc).timestamp()) - 60
+        )
+        db.commit()
+    finally:
+        session_generator.close()
+
+    # An expired refresh token must be rejected.
+    response = client.post(
+        "/refresh",
+        json={"refresh_token": token},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid or expired refresh token"
+    }
+def test_logout_revokes_only_its_session(student_client):
+    client = student_client
+
+    account = {
+        "username": "logout_test",
+        "password": "Practice-only-Password!",
+    }
+
+    response = client.post("/register", json=account)
+    assert response.status_code == 201
+
+    # Two logins create separate token families.
+    response = client.post("/login", json=account)
+    assert response.status_code == 200
+    first_pair = response.json()
+
+    response = client.post("/login", json=account)
+    assert response.status_code == 200
+    second_pair = response.json()
+
+    # Log out the first session.
+    response = client.post(
+        "/logout",
+        json={
+            "refresh_token": first_pair["refresh_token"]
+        },
+    )
+    assert response.status_code == 200
+    assert response.json() == {"message": "Logged out"}
+
+    # Repeating logout is harmless.
+    response = client.post(
+        "/logout",
+        json={
+            "refresh_token": first_pair["refresh_token"]
+        },
+    )
+    assert response.status_code == 200
+
+    # The first session cannot renew access.
+    response = client.post(
+        "/refresh",
+        json={
+            "refresh_token": first_pair["refresh_token"]
+        },
+    )
+    assert response.status_code == 401
+
+    # The separate login remains usable.
+    response = client.post(
+        "/refresh",
+        json={
+            "refresh_token": second_pair["refresh_token"]
+        },
+    )
+    assert response.status_code == 200
+
+    # Logout doesn't immediately invalidate an access token.
+    response = client.get(
+        "/me",
+        headers={
+            "Authorization": (
+                f"Bearer {first_pair['access_token']}"
+            )
+        },
+    )
+    assert response.status_code == 200

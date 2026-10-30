@@ -2,6 +2,8 @@ from pwdlib import PasswordHash
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import hashlib
+import secrets
 
 import jwt
 from dotenv import load_dotenv
@@ -45,3 +47,14 @@ def create_access_token(user_id: int) -> str:
         get_jwt_secret(),
         algorithm="HS256",
     )
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(
+        token.encode("utf-8")
+    ).hexdigest()
+
+
+def create_refresh_token() -> tuple[str, str]:
+    token = secrets.token_urlsafe(48)
+    token_hash = hash_refresh_token(token)
+
+    return token, token_hash

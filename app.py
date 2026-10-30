@@ -2,6 +2,14 @@ import os
 import secrets
 from pathlib import Path
 from typing import Annotated
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+
+from models import RefreshSession
+from security import create_refresh_token
+from sqlalchemy import update
+from schemas import RefreshRequest
+from security import hash_refresh_token
 
 import jwt
 from dotenv import load_dotenv
@@ -120,6 +128,16 @@ def require_admin(
         )
 
     return current_user
+
+def revoke_refresh_family(db: Session, family_id: str):
+    db.execute(
+        update(RefreshSession)
+        .where(RefreshSession.family_id == family_id)
+        .values(revoked=True)
+        .execution_options(synchronize_session=False)
+    )
+
+
 
 
 class StudentRequest(BaseModel):
@@ -333,12 +351,32 @@ def login(
             detail="Incorrect username or password",
         )
 
+    access_token = create_access_token(user.id)
+    refresh_token, token_hash = create_refresh_token()
+
+    expires_at = int(
+        (
+            datetime.now(timezone.utc)
+            + timedelta(days=7)
+        ).timestamp()
+    )
+
+    refresh_session = RefreshSession(
+        user_id=user.id,
+        token_hash=token_hash,
+        family_id=str(uuid4()),
+        expires_at=expires_at,
+        revoked=False,
+    )
+
+    db.add(refresh_session)
+    db.commit()
+
     return {
-        "access_token": create_access_token(user.id),
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
     }
-
-
 @app.get(
     "/me",
     response_model=UserResponse,
@@ -357,3 +395,96 @@ def check_admin_access(
         "message": "Admin access granted",
         "username": current_user.username,
     }
+@app.post("/refresh", response_model=TokenResponse)
+def refresh_tokens(
+    request: RefreshRequest,
+    db: Session = Depends(get_db),
+):
+    auth_error = HTTPException(
+        status_code=401,
+        detail="Invalid or expired refresh token",
+    )
+
+    token_hash = hash_refresh_token(request.refresh_token)
+
+    session_record = db.scalar(
+        select(RefreshSession).where(
+            RefreshSession.token_hash == token_hash
+        )
+    )
+
+    if session_record is None:
+        raise auth_error
+
+    now = int(datetime.now(timezone.utc).timestamp())
+
+    if session_record.expires_at <= now:
+        raise auth_error
+
+    if session_record.revoked:
+        revoke_refresh_family(db, session_record.family_id)
+        db.commit()
+        raise auth_error
+
+    user = db.get(User, session_record.user_id)
+
+    if user is None:
+        raise auth_error
+
+    access_token = create_access_token(user.id)
+    new_token, new_hash = create_refresh_token()
+
+    # Consume the old token only if it is still active.
+    result = db.execute(
+        update(RefreshSession)
+        .where(
+            RefreshSession.id == session_record.id,
+            RefreshSession.revoked.is_(False),
+            RefreshSession.expires_at > now,
+        )
+        .values(revoked=True)
+        .execution_options(synchronize_session=False)
+    )
+
+    if result.rowcount != 1:
+        revoke_refresh_family(db, session_record.family_id)
+        db.commit()
+        raise auth_error
+
+    replacement = RefreshSession(
+        user_id=user.id,
+        token_hash=new_hash,
+        family_id=session_record.family_id,
+        expires_at=session_record.expires_at,
+        revoked=False,
+    )
+
+    db.add(replacement)
+    db.commit()
+
+    return {
+        "access_token": access_token,
+        "refresh_token": new_token,
+        "token_type": "bearer",
+    }
+@app.post("/logout")
+def logout(
+    request: RefreshRequest,
+    db: Session = Depends(get_db),
+):
+    token_hash = hash_refresh_token(request.refresh_token)
+
+    session_record = db.scalar(
+        select(RefreshSession).where(
+            RefreshSession.token_hash == token_hash
+        )
+    )
+
+    if session_record is not None:
+        revoke_refresh_family(
+            db,
+            session_record.family_id,
+        )
+        db.commit()
+
+    return {"message": "Logged out"}
