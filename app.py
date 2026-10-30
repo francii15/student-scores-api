@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Annotated
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
+from config import settings
 
 from models import RefreshSession
 from security import create_refresh_token
@@ -44,14 +45,7 @@ from security import (
 )
 
 
-load_dotenv(Path(__file__).with_name(".env"))
-
-API_KEY = os.getenv("STUDENT_API_KEY")
-
-if not API_KEY:
-    raise RuntimeError("Set STUDENT_API_KEY in your .env file")
-
-
+API_KEY = settings.api_key.get_secret_value()
 app = FastAPI(
     title="Student Scores API",
     description="Analyse student scores with API-key and JWT authentication.",
@@ -357,7 +351,7 @@ def login(
     expires_at = int(
         (
             datetime.now(timezone.utc)
-            + timedelta(days=7)
+            + + timedelta(days=settings.refresh_token_days)
         ).timestamp()
     )
 

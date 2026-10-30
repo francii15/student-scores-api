@@ -9,10 +9,6 @@ import jwt
 from security import get_jwt_secret
 import os
 
-os.environ["STUDENT_API_KEY"] = "test-only-key"
-os.environ["JWT_SECRET_KEY"] = (
-    "test-only-jwt-secret-at-least-32-characters"
-)
 
 import pytest
 from fastapi.testclient import TestClient

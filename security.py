@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import hashlib
 import secrets
+from config import settings
+
 
 import jwt
 from dotenv import load_dotenv
@@ -23,15 +25,7 @@ def verify_password(
 )->bool:
    return password_hasher.verify(password,stored_hash)
 def get_jwt_secret() -> str:
-    secret = os.getenv("JWT_SECRET_KEY")
-
-    if not secret:
-        raise RuntimeError(
-            "Set JWT_SECRET_KEY in your .env file"
-        )
-
-    return secret
-
+    return settings.jwt_secret.get_secret_value()
 
 def create_access_token(user_id: int) -> str:
     now = datetime.now(timezone.utc)
@@ -39,7 +33,9 @@ def create_access_token(user_id: int) -> str:
     payload = {
         "sub": str(user_id),
         "iat": now,
-        "exp": now + timedelta(minutes=30),
+       "exp": now + timedelta(
+    minutes=settings.access_token_minutes
+),
     }
 
     return jwt.encode(
