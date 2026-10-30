@@ -170,7 +170,7 @@ def passing_students(request: StudentRequest):
     "/students",
     response_model=StudentResponse,
     status_code=201,
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(require_admin)],
 )
 def create_student(
     request: StudentCreate,
@@ -191,7 +191,7 @@ def create_student(
 @app.get(
     "/students/{student_id}",
     response_model=StudentResponse,
-    dependencies=[Depends(verify_api_key)],
+   dependencies=[Depends(require_admin)],
 )
 def get_student(
     student_id: int,
@@ -211,7 +211,7 @@ def get_student(
 @app.get(
     "/students",
     response_model=list[StudentResponse],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(require_admin)],
 )
 def list_students(
     db: Session = Depends(get_db),
@@ -225,7 +225,7 @@ def list_students(
 @app.put(
     "/students/{student_id}",
     response_model=StudentResponse,
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(require_admin)],
 )
 def update_student(
     student_id: int,
@@ -252,7 +252,7 @@ def update_student(
 @app.delete(
     "/students/{student_id}",
     response_model=StudentResponse,
-    dependencies=[Depends(verify_api_key)],
+   dependencies=[Depends(require_admin)],
 )
 def delete_student(
     student_id: int,

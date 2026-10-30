@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta, timezone
+from sqlalchemy import select 
+from models import Student
 
 import jwt
 
@@ -57,7 +59,32 @@ def student_client(tmp_path):
 
 def test_student_crud(student_client):
     client = student_client
-    headers = {"X-API-Key": "test-only-key"}
+
+    # Create an account in the temporary database.
+    response = client.post(
+        "/register",
+        json={
+            "username": "crud_admin",
+            "password": "Practice-only-Password!",
+        },
+    )
+    assert response.status_code == 201
+    user_id = response.json()["id"]
+
+    # Grant admin permission for this test.
+    db_override = app.dependency_overrides[get_db]
+    session_generator = db_override()
+
+    try:
+        db = next(session_generator)
+        user = db.get(User, user_id)
+        user.role = "admin"
+        db.commit()
+    finally:
+        session_generator.close()
+
+    token = create_access_token(user_id)
+    headers = {"Authorization": f"Bearer {token}"}
 
     # Create a student.
     response = client.post(
@@ -82,7 +109,7 @@ def test_student_crud(student_client):
     assert response.status_code == 200
     assert response.json() == expected
 
-    # Check the student appears in the list.
+    # List students.
     response = client.get("/students", headers=headers)
     assert response.status_code == 200
     assert response.json() == [expected]
@@ -113,7 +140,7 @@ def test_student_crud(student_client):
     assert response.status_code == 200
     assert response.json() == expected
 
-    # Confirm the student no longer exists.
+    # Confirm deletion.
     response = client.get(
         f"/students/{student_id}",
         headers=headers,
@@ -124,6 +151,7 @@ def test_student_crud(student_client):
     response = client.get("/students", headers=headers)
     assert response.status_code == 200
     assert response.json() == []
+
 def test_registration_and_login(student_client):
     client = student_client
     account = {
@@ -303,3 +331,99 @@ def test_admin_permissions(
         assert response.json() == {
             "detail": "Admin access required"
         }
+@pytest.mark.parametrize(
+    "method, path",
+    [
+        ("POST", "/students"),
+        ("GET", "/students"),
+        ("GET", "/students/{student_id}"),
+        ("PUT", "/students/{student_id}"),
+        ("DELETE", "/students/{student_id}"),
+    ],
+)
+@pytest.mark.parametrize(
+    "caller, expected_status",
+    [
+        ("anonymous", 401),
+        ("api_key_only", 401),
+        ("ordinary_user", 403),
+    ],
+)
+def test_student_access_denied(
+    student_client,
+    method,
+    path,
+    caller,
+    expected_status,
+):
+    client = student_client
+
+    # Save a student so rejection isn't caused by a missing record.
+    db_override = app.dependency_overrides[get_db]
+    session_generator = db_override()
+
+    try:
+        db = next(session_generator)
+        student = Student(name="Protected Student", score=85)
+        db.add(student)
+        db.commit()
+        db.refresh(student)
+        student_id = student.id
+    finally:
+        session_generator.close()
+
+    headers = {}
+
+    if caller == "api_key_only":
+        headers = {"X-API-Key": "test-only-key"}
+
+    elif caller == "ordinary_user":
+        response = client.post(
+            "/register",
+            json={
+                "username": "ordinary_user",
+                "password": "Practice-only-Password!",
+            },
+        )
+        assert response.status_code == 201
+        user_id = response.json()["id"]
+
+        token = create_access_token(user_id)
+        headers = {"Authorization": f"Bearer {token}"}
+
+    request_options = {"headers": headers}
+
+    if method in ("POST", "PUT"):
+        request_options["json"] = {
+            "name": "Changed Student",
+            "score": 90,
+        }
+
+    response = client.request(
+        method,
+        path.format(student_id=student_id),
+        **request_options,
+    )
+
+    assert response.status_code == expected_status
+
+    expected_detail = (
+        "Admin access required"
+        if expected_status == 403
+        else "Invalid or expired access token"
+    )
+    assert response.json() == {"detail": expected_detail}
+
+    # Denied requests must leave the saved data unchanged.
+    session_generator = db_override()
+
+    try:
+        db = next(session_generator)
+        students = db.scalars(select(Student)).all()
+
+        assert len(students) == 1
+        assert students[0].id == student_id
+        assert students[0].name == "Protected Student"
+        assert students[0].score == 85
+    finally:
+        session_generator.close()
