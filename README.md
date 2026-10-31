@@ -16,6 +16,34 @@ The API returns passing and failing students, student counts,
 
 and the average score.
 
+## Live Demo
+
+- [API homepage](https://student-scores-api.onrender.com)
+- [Interactive API documentation](https://student-scores-api.onrender.com/docs)
+- [Health check](https://student-scores-api.onrender.com/health)
+- [Database readiness check](https://student-scores-api.onrender.com/ready)
+
+### Trying the API
+
+Register a practice account through POST /register, then log in
+through POST /login. Enter the returned access token under
+Authorize → HTTPBearer to try GET /me.
+
+Student CRUD endpoints require an administrator account.
+POST /passing-students requires a private deployment API key.
+
+### Hosting Limitations
+
+This practice application runs on Render's free plan.
+The service sleeps after inactivity, so the first request may be slow.
+
+SQLite storage is temporary. Registered users, student records,
+and refresh sessions are lost when the service restarts,
+redeploys, or spins down. Migrations recreate the database tables
+when the application starts.
+
+Use sample data only.
+
 
 
 ## Features
