@@ -1,8 +1,5 @@
 import os
 
-# Set a test-only key before importing the application.
-os.environ["STUDENT_API_KEY"] = "test-only-key"
-
 from fastapi.testclient import TestClient
 from app import app
 

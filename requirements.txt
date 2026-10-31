@@ -4,3 +4,8 @@ python-dotenv
 pydantic
 pytest
 httpx2
+SQLAlchemy>=2.0,<2.1
+pwdlib[argon2]
+PyJWT
+alembic
+slowapi
