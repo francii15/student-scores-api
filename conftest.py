@@ -1,4 +1,5 @@
 import os
+import pytest
 
 
 # Dummy credentials used only by the test process.
@@ -10,3 +11,14 @@ os.environ["JWT_SECRET_KEY"] = (
 
 os.environ["ACCESS_TOKEN_MINUTES"] = "30"
 os.environ["REFRESH_TOKEN_DAYS"] = "7"
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    from rate_limit import limiter
+
+    limiter.reset()
+
+    try:
+        yield
+    finally:
+        limiter.reset()

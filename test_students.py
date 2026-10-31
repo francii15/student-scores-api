@@ -635,3 +635,29 @@ def test_readiness_database_failure(
     # The application itself should still respond.
     response = student_client.get("/health")
     assert response.status_code == 200
+def test_login_rate_limit(student_client):
+    client = student_client
+
+    credentials = {
+        "username": "nonexistent_user",
+        "password": "Wrong-practice-password!",
+    }
+
+    # The first five requests reach authentication.
+    for _ in range(5):
+        response = client.post(
+            "/login",
+            json=credentials,
+        )
+        assert response.status_code == 401
+
+    # The sixth request exceeds the limit.
+    response = client.post(
+        "/login",
+        json=credentials,
+    )
+    assert response.status_code == 429
+
+    # Other endpoints remain available.
+    response = client.get("/health")
+    assert response.status_code == 200

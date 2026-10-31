@@ -10,6 +10,10 @@ import logging
 from time import perf_counter
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
+from rate_limit import limiter
 
 from fastapi import Request
 
@@ -58,6 +62,13 @@ app = FastAPI(
     description="Analyse student scores with API-key and JWT authentication.",
     version="0.3.0",
 )
+app.state.limiter = limiter
+
+app.add_exception_handler(
+    RateLimitExceeded,
+    _rate_limit_exceeded_handler,
+)
+
 logger = logging.getLogger("uvicorn.error")
 
 
@@ -353,12 +364,16 @@ def register_user(
     "/login",
     response_model=TokenResponse,
 )
+@limiter.limit("5/minute")
 def login(
-    request: UserLogin,
+    request: Request,
+    credentials: UserLogin,
     db: Session = Depends(get_db),
 ):
     user = db.scalar(
-        select(User).where(User.username == request.username)
+        select(User).where(
+            User.username == credentials.username
+        )
     )
 
     stored_hash = (
@@ -368,7 +383,7 @@ def login(
     )
 
     password_matches = verify_password(
-        request.password,
+        credentials.password,
         stored_hash,
     )
 
@@ -384,7 +399,7 @@ def login(
     expires_at = int(
         (
             datetime.now(timezone.utc)
-            + + timedelta(days=settings.refresh_token_days)
+            + timedelta(days=settings.refresh_token_days)
         ).timestamp()
     )
 
@@ -404,6 +419,7 @@ def login(
         "refresh_token": refresh_token,
         "token_type": "bearer",
     }
+
 @app.get(
     "/me",
     response_model=UserResponse,
